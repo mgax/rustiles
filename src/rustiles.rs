@@ -1,6 +1,7 @@
 extern crate sync;
 extern crate http;
 extern crate test;
+extern crate gdal;
 
 use std::vec::Vec;
 use std::io::net::ip::{SocketAddr, Ipv4Addr};
@@ -13,8 +14,6 @@ use http::headers;
 use tile::spawn_tile_worker;
 use workqueue::{WorkQueue, WorkQueueProxy};
 
-#[allow(dead_code)]
-mod gdal;
 mod tile;
 mod workqueue;
 

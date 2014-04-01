@@ -3,11 +3,6 @@ RUSTFLAGS ?=
 
 src_files=\
 	src/rustiles.rs \
-	src/gdal/mod.rs \
-	src/gdal/driver.rs \
-	src/gdal/dataset.rs \
-	src/gdal/proj.rs \
-	src/gdal/geom.rs \
 	src/tile.rs \
 	src/workqueue.rs
 
