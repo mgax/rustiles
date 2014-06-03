@@ -27,7 +27,7 @@ fn test_nothing() {
 
 #[deriving(Clone)]
 struct TileServer {
-    queue: WorkQueueProxy<(int, int, int), ~[u8]>,
+    queue: WorkQueueProxy<(int, int, int), Vec<u8>>,
 }
 
 
@@ -43,33 +43,33 @@ impl Server for TileServer {
 
     fn handle_request(&self, r: &Request, w: &mut ResponseWriter) {
         w.headers.content_type = Some(headers::content_type::MediaType {
-            type_: ~"text",
-            subtype: ~"html",
+            type_: "text".to_string(),
+            subtype: "html".to_string(),
             parameters: Vec::new(),
         });
 
         match r.request_uri {
             AbsolutePath(ref url) => {
-                if url == &~"/" {
+                if *url == "/".to_string() {
                     w.write(index_html.as_bytes()).unwrap();
                     return;
                 }
-                let bits: ~[&str] = url.split('/').collect();
-                if bits.len() == 5 && bits[0] == "" && bits[1] == "tile" {
+                let bits: Vec<String> = url.as_slice().split('/').map(|s| s.to_string()).collect();
+                if bits.len() == 5 && *bits.get(0) == "".to_string() && *bits.get(1) == "tile".to_string() {
                     match (
-                        from_str::<int>(bits[2]),
-                        from_str::<int>(bits[3]),
-                        from_str::<int>(bits[4])
+                        from_str::<int>(bits.get(2).as_slice()),
+                        from_str::<int>(bits.get(3).as_slice()),
+                        from_str::<int>(bits.get(4).as_slice())
                     ) {
                         (Some(z), Some(x), Some(y)) => {
                             let content_type = headers::content_type::MediaType {
-                                type_: ~"image",
-                                subtype: ~"png",
+                                type_: "image".to_string(),
+                                subtype: "png".to_string(),
                                 parameters: Vec::new(),
                             };
                             w.headers.content_type = Some(content_type);
                             let tile_png = self.queue.push((x, y, z)).recv();
-                            w.write(tile_png).unwrap();
+                            w.write(tile_png.as_slice()).unwrap();
                         },
                         _ => {}
                     }
@@ -87,8 +87,8 @@ impl Server for TileServer {
 
 fn main() {
     use std::os::args;
-    let source_path = Path::new(args()[1]);
-    let (queue, dispatcher) = WorkQueue::<(int, int, int), ~[u8]>();
+    let source_path = Path::new(args().get(1).as_slice());
+    let (queue, dispatcher) = WorkQueue::<(int, int, int), Vec<u8>>();
     task::spawn(proc() { dispatcher.run(); });
     for _ in range(0, 4) {
         spawn_tile_worker(&queue, &source_path);

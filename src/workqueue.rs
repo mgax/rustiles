@@ -31,7 +31,7 @@ for _ in range(0, 10) {
 }
 
 // Execute jobs on the queue
-let answers: ~[int] =
+let answers: Vec<int> =
     range(0, 1000)
     .map(|n| queue.push(n))
     .map(|rv| rv.recv())
@@ -69,22 +69,22 @@ enum MessageToDispatcher<ARG, RV> {
 
 /// A queue that distributes work items to worker tasks.
 pub struct WorkQueue<ARG, RV> {
-    priv dispatcher: Sender<MessageToDispatcher<ARG, RV>>,
+    dispatcher: Sender<MessageToDispatcher<ARG, RV>>,
 }
 
 /// A proxy to a `WorkQueue`. It can be freely cloned to use from multiple tasks.
 pub struct Dispatcher<ARG, RV> {
-    priv inbox: Receiver<MessageToDispatcher<ARG, RV>>,
+    inbox: Receiver<MessageToDispatcher<ARG, RV>>,
 }
 
 /// A proxy to a `WorkQueue`. It can be freely cloned to use from multiple tasks.
 pub struct WorkQueueProxy<ARG, RV> {
-    priv dispatcher: Sender<MessageToDispatcher<ARG, RV>>,
+    dispatcher: Sender<MessageToDispatcher<ARG, RV>>,
 }
 
 /// A worker that executes tasks from its parent queue.
 pub struct Worker<ARG, RV> {
-    priv ask_for_work: Sender<Sender<MessageToWorker<ARG, RV>>>,
+    ask_for_work: Sender<Sender<MessageToWorker<ARG, RV>>>,
 }
 
 /// Create a new work queue.
@@ -198,13 +198,13 @@ mod test {
             spawn(proc() { worker.run(|arg| arg * 2); });
         }
 
-        let return_list: ~[int] =
+        let return_list: Vec<int> =
             range(0, 10)
             .map(|c| queue.push(c))
             .map(|rv| rv.recv())
             .collect();
 
-        assert_eq!(return_list, ~[0, 2, 4, 6, 8, 10, 12, 14, 16, 18]);
+        assert_eq!(return_list, vec!(0, 2, 4, 6, 8, 10, 12, 14, 16, 18));
     }
 
     #[test]
@@ -215,7 +215,7 @@ mod test {
             let worker = queue.worker();
             spawn(proc() { worker.run(|arg| arg * 2); });
         }
-        let mut promise_list: ~[Receiver<int>] = ~[];
+        let mut promise_list: Vec<Receiver<int>> = vec!();
         let queue_proxy = queue.proxy();
         for c in range(0, 10) {
             let queue_proxy_clone = queue_proxy.clone();
@@ -229,12 +229,12 @@ mod test {
             });
         }
 
-        let return_list: ~[int] =
+        let return_list: Vec<int> =
             promise_list
             .iter()
             .map(|promise| promise.recv())
             .collect();
-        assert_eq!(return_list, ~[0, 2, 4, 6, 8, 10, 12, 14, 16, 18]);
+        assert_eq!(return_list, vec!(0, 2, 4, 6, 8, 10, 12, 14, 16, 18));
     }
 }
 
@@ -242,11 +242,11 @@ mod test {
 mod bench {
     extern crate test;
 
-    use self::test::BenchHarness;
+    use self::test::Bencher;
     use super::WorkQueue;
 
     #[bench]
-    fn bench_50_tasks_4_threads(b: &mut BenchHarness) {
+    fn bench_50_tasks_4_threads(b: &mut Bencher) {
         let (queue, dispatcher) = WorkQueue::<int, int>();
         spawn(proc() { dispatcher.run() });
         for _ in range(0, 4) {
@@ -254,7 +254,7 @@ mod bench {
             spawn(proc() { worker.run(|arg| arg * 2); });
         }
         b.iter(|| {
-            let _: ~[int] =
+            let _: Vec<int> =
                 range(0, 50)
                 .map(|_| queue.push(1))
                 .map(|rv| rv.recv())
@@ -263,7 +263,7 @@ mod bench {
     }
 
     #[bench]
-    fn bench_spawn_5_workers(b: &mut BenchHarness) {
+    fn bench_spawn_5_workers(b: &mut Bencher) {
         b.iter(|| {
             let (queue, dispatcher) = WorkQueue::<int, int>();
             spawn(proc() { dispatcher.run() });
