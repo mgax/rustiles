@@ -42,6 +42,25 @@ impl TileServer {
         w.write(tile_png.as_slice()).unwrap();
     }
 
+    fn handle_static(&self, filename: &str, w: &mut ResponseWriter) {
+        w.headers.content_type = Some(headers::content_type::MediaType {
+            type_: "text".to_string(),
+            subtype: "html".to_string(),
+            parameters: Vec::new(),
+        });
+
+        let content = match filename {
+            "/" => index_html.as_bytes(),
+            _   => { self.handle_404(w); return }
+        };
+        w.write(content).unwrap();
+    }
+
+    fn handle_404(&self, w: &mut ResponseWriter) {
+        w.status = NotFound;
+        w.write("Page not found :(\n".as_bytes()).unwrap();
+    }
+
     fn handle(&self, r: &Request, w: &mut ResponseWriter) {
         w.headers.content_type = Some(headers::content_type::MediaType {
             type_: "text".to_string(),
@@ -51,10 +70,6 @@ impl TileServer {
 
         match r.request_uri {
             AbsolutePath(ref url) => {
-                if *url == "/".to_string() {
-                    w.write(index_html.as_bytes()).unwrap();
-                    return;
-                }
                 let bits: Vec<String> = url.as_slice().split('/').map(|s| s.to_string()).collect();
                 if bits.len() == 5 && *bits.get(0) == "".to_string() && *bits.get(1) == "tile".to_string() {
                     match (
@@ -68,12 +83,14 @@ impl TileServer {
                         _ => {}
                     }
                 }
+                else {
+                    self.handle_static(url.as_slice(), w);
+                }
             },
             _ => {}
         };
 
-        w.status = NotFound;
-        w.write("Page not found :(\n".as_bytes()).unwrap();
+        self.handle_404(w);
     }
 }
 
