@@ -70,7 +70,7 @@ pub fn tile(source: &RasterDataset, (x, y, z): (int, int, int)) -> Vec<u8> {
 }
 
 
-pub fn spawn_tile_worker(
+pub fn raster_tile_worker(
     queue: &WorkQueue<(int, int, int), Vec<u8>>,
     source_path: &Path
 ) {

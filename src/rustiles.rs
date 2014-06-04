@@ -17,7 +17,7 @@ use http::server::{Config, Server, Request, ResponseWriter};
 use http::server::request::AbsolutePath;
 use http::status::NotFound;
 use http::headers;
-use tile::spawn_tile_worker;
+use tile::raster_tile_worker;
 use workqueue::{WorkQueue, WorkQueueProxy};
 
 mod tile;
@@ -33,18 +33,18 @@ fn test_nothing() {
 
 #[deriving(Clone)]
 struct TileServer {
-    queue: WorkQueueProxy<(int, int, int), Vec<u8>>,
+    raster_queue: WorkQueueProxy<(int, int, int), Vec<u8>>,
 }
 
 
 impl TileServer {
-    fn handle_tile(&self, x: int, y: int, z: int, w: &mut ResponseWriter) {
+    fn handle_raster_tile(&self, x: int, y: int, z: int, w: &mut ResponseWriter) {
         w.headers.content_type = Some(headers::content_type::MediaType {
             type_: "image".to_string(),
             subtype: "png".to_string(),
             parameters: Vec::new(),
         });
-        let tile_png = self.queue.push((x, y, z)).recv();
+        let tile_png = self.raster_queue.push((x, y, z)).recv();
         w.write(tile_png.as_slice()).unwrap();
     }
 
@@ -80,7 +80,7 @@ impl TileServer {
             AbsolutePath(ref url) => {
                 match regex!(r"^/raster/(\d+)/(\d+)/(\d+)").captures(url.as_slice()) {
                     Some(caps) => {
-                        self.handle_tile(
+                        self.handle_raster_tile(
                             from_str::<int>(caps.at(2)).unwrap(),
                             from_str::<int>(caps.at(3)).unwrap(),
                             from_str::<int>(caps.at(1)).unwrap(),
@@ -117,12 +117,12 @@ impl Server for TileServer {
 fn main() {
     use std::os::args;
     let source_path = Path::new(args().get(1).as_slice());
-    let (queue, dispatcher) = WorkQueue::<(int, int, int), Vec<u8>>();
+    let (raster_queue, dispatcher) = WorkQueue::<(int, int, int), Vec<u8>>();
     task::spawn(proc() { dispatcher.run(); });
     for _ in range(0, 4) {
-        spawn_tile_worker(&queue, &source_path);
+        raster_tile_worker(&raster_queue, &source_path);
     }
-    TileServer{queue: queue.proxy()}.serve_forever();
+    TileServer{raster_queue: raster_queue.proxy()}.serve_forever();
 }
 
 
