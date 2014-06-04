@@ -58,6 +58,7 @@ impl TileServer {
         let content = match filename {
             "/" => index_html.as_bytes(),
             "/raster" => raster_html.as_bytes(),
+            "/vector" => vector_html.as_bytes(),
             _   => { self.handle_404(w); return }
         };
         w.write(content).unwrap();
@@ -128,6 +129,7 @@ fn main() {
 static index_html: &'static str = "<!doctype html>\n\
 <meta charset='utf-8'>\n\
 <p><a href=/raster>raster</a>
+<p><a href=/vector>vector</a>
 \n\
 ";
 
@@ -153,4 +155,105 @@ var nasa = L.tileLayer('/raster/{z}/{x}/{y}').addTo(map);
 function updateOpacity() { nasa.setOpacity(+($('input').val()) / 100); }
 $('input').change(updateOpacity); updateOpacity();
 </script>
+";
+
+
+static vector_html: &'static str = "<!doctype html>\n\
+<meta charset='utf-8'>\n\
+<title>RusTiles vector demo</title>\n\
+<style>\n\
+body { margin: 0; }\n\
+.map { position: relative; overflow: hidden; }\n\
+.layer { position: absolute; }\n\
+.tile { position: absolute; width: 256px; height: 256px; }\n\
+.tile path { fill: none; stroke: #000; stroke-linejoin: round; stroke-linecap: round; }\n\
+.tile .major_road { stroke: #776; }\n\
+.tile .minor_road { stroke: #ccb; }\n\
+.tile .highway { stroke: #f39; stroke-width: 1.5px; }\n\
+.tile .rail { stroke: #7de; }\n\
+.info { position: absolute; bottom: 10px; left: 10px; }\n\
+</style>\n\
+<body>\n\
+<script src='http://d3js.org/d3.v3.min.js'></script>\n\
+<script src='http://d3js.org/d3.geo.tile.v0.min.js'></script>\n\
+<script>\n\
+var width = Math.max(960, window.innerWidth),\n\
+    height = Math.max(500, window.innerHeight),\n\
+    prefix = prefixMatch(['webkit', 'ms', 'Moz', 'O']);\n\
+var tile = d3.geo.tile()\n\
+    .size([width, height]);\n\
+var projection = d3.geo.mercator()\n\
+    .scale((1 << 21) / 2 / Math.PI)\n\
+    .translate([-width / 2, -height / 2]); // just temporary\n\
+var tileProjection = d3.geo.mercator();\n\
+var tilePath = d3.geo.path()\n\
+    .projection(tileProjection);\n\
+var zoom = d3.behavior.zoom()\n\
+    .scale(projection.scale() * 2 * Math.PI)\n\
+    .scaleExtent([1 << 20, 1 << 23])\n\
+    .translate(projection([-74.0064, 40.7142]).map(function(x) { return -x; }))\n\
+    .on('zoom', zoomed);\n\
+var map = d3.select('body').append('div')\n\
+    .attr('class', 'map')\n\
+    .style('width', width + 'px')\n\
+    .style('height', height + 'px')\n\
+    .call(zoom)\n\
+    .on('mousemove', mousemoved);\n\
+var layer = map.append('div')\n\
+    .attr('class', 'layer');\n\
+var info = map.append('div')\n\
+    .attr('class', 'info');\n\
+zoomed();\n\
+function zoomed() {\n\
+  var tiles = tile\n\
+      .scale(zoom.scale())\n\
+      .translate(zoom.translate())\n\
+      ();\n\
+  projection\n\
+      .scale(zoom.scale() / 2 / Math.PI)\n\
+      .translate(zoom.translate());\n\
+  var image = layer\n\
+      .style(prefix + 'transform', matrix3d(tiles.scale, tiles.translate))\n\
+    .selectAll('.tile')\n\
+      .data(tiles, function(d) { return d; });\n\
+  image.exit()\n\
+      .each(function(d) { this._xhr.abort(); })\n\
+      .remove();\n\
+  image.enter().append('svg')\n\
+      .attr('class', 'tile')\n\
+      .style('left', function(d) { return d[0] * 256 + 'px'; })\n\
+      .style('top', function(d) { return d[1] * 256 + 'px'; })\n\
+      .each(function(d) {\n\
+        var svg = d3.select(this);\n\
+        this._xhr = d3.json('http://' + ['a', 'b', 'c'][(d[0] * 31 + d[1]) % 3] + '.tile.openstreetmap.us/vectiles-highroad/' + d[2] + '/' + d[0] + '/' + d[1] + '.json', function(error, json) {\n\
+          var k = Math.pow(2, d[2]) * 256; // size of the world in pixels\n\
+          tilePath.projection()\n\
+              .translate([k / 2 - d[0] * 256, k / 2 - d[1] * 256]) // [0°,0°] in pixels\n\
+              .scale(k / 2 / Math.PI);\n\
+          svg.selectAll('path')\n\
+              .data(json.features.sort(function(a, b) { return a.properties.sort_key - b.properties.sort_key; }))\n\
+            .enter().append('path')\n\
+              .attr('class', function(d) { return d.properties.kind; })\n\
+              .attr('d', tilePath);\n\
+        });\n\
+      });\n\
+}\n\
+function mousemoved() {\n\
+  info.text(formatLocation(projection.invert(d3.mouse(this)), zoom.scale()));\n\
+}\n\
+function matrix3d(scale, translate) {\n\
+  var k = scale / 256, r = scale % 1 ? Number : Math.round;\n\
+  return 'matrix3d(' + [k, 0, 0, 0, 0, k, 0, 0, 0, 0, k, 0, r(translate[0] * scale), r(translate[1] * scale), 0, 1 ] + ')';\n\
+}\n\
+function prefixMatch(p) {\n\
+  var i = -1, n = p.length, s = document.body.style;\n\
+  while (++i < n) if (p[i] + 'Transform' in s) return '-' + p[i].toLowerCase() + '-';\n\
+  return '';\n\
+}\n\
+function formatLocation(p, k) {\n\
+  var format = d3.format('.' + Math.floor(Math.log(k) / 2 - 2) + 'f');\n\
+  return (p[1] < 0 ? format(-p[1]) + '°S' : format(p[1]) + '°N') + ' '\n\
+       + (p[0] < 0 ? format(-p[0]) + '°W' : format(p[0]) + '°E');\n\
+}\n\
+</script>\n\
 ";
