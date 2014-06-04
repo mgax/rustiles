@@ -57,6 +57,7 @@ impl TileServer {
 
         let content = match filename {
             "/" => index_html.as_bytes(),
+            "/raster" => raster_html.as_bytes(),
             _   => { self.handle_404(w); return }
         };
         w.write(content).unwrap();
@@ -76,7 +77,7 @@ impl TileServer {
 
         match r.request_uri {
             AbsolutePath(ref url) => {
-                match regex!(r"^/tile/(\d+)/(\d+)/(\d+)").captures(url.as_slice()) {
+                match regex!(r"^/raster/(\d+)/(\d+)/(\d+)").captures(url.as_slice()) {
                     Some(caps) => {
                         self.handle_tile(
                             from_str::<int>(caps.at(2)).unwrap(),
@@ -90,10 +91,8 @@ impl TileServer {
 
                 self.handle_static(url.as_slice(), w);
             },
-            _ => {}
+            _ => self.handle_404(w)
         };
-
-        self.handle_404(w);
     }
 }
 
@@ -126,9 +125,16 @@ fn main() {
 }
 
 
-static index_html: &'static str = "<!doctype html>\
+static index_html: &'static str = "<!doctype html>\n\
 <meta charset='utf-8'>\n\
-<title>RusTiles demo</title>\n\
+<p><a href=/raster>raster</a>
+\n\
+";
+
+
+static raster_html: &'static str = "<!doctype html>\n\
+<meta charset='utf-8'>\n\
+<title>RusTiles raster demo</title>\n\
 <link rel='stylesheet' href='//cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.2/leaflet.css'>\n\
 <style>
 html, body, #map { margin: 0; height: 100%; }
@@ -143,7 +149,7 @@ var map = L.map('map').setView([40, 10], 3);
 L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
   attribution: '&copy; <a href=\\'http://osm.org/copyright\\'>' +
                'OpenStreetMap</a> contributors'}).addTo(map);
-var nasa = L.tileLayer('/tile/{z}/{x}/{y}').addTo(map);
+var nasa = L.tileLayer('/raster/{z}/{x}/{y}').addTo(map);
 function updateOpacity() { nasa.setOpacity(+($('input').val()) / 100); }
 $('input').change(updateOpacity); updateOpacity();
 </script>
