@@ -17,7 +17,7 @@ use http::server::{Config, Server, Request, ResponseWriter};
 use http::server::request::AbsolutePath;
 use http::status::NotFound;
 use http::headers;
-use tile::raster_tile_worker;
+use tile::{raster_tile_worker, vector_tile_worker};
 use workqueue::{WorkQueue, WorkQueueProxy};
 
 mod tile;
@@ -34,6 +34,7 @@ fn test_nothing() {
 #[deriving(Clone)]
 struct TileServer {
     raster_queue: WorkQueueProxy<(int, int, int), Vec<u8>>,
+    vector_queue: WorkQueueProxy<(int, int, int), Vec<u8>>,
 }
 
 
@@ -45,6 +46,16 @@ impl TileServer {
             parameters: Vec::new(),
         });
         let tile_png = self.raster_queue.push((x, y, z)).recv();
+        w.write(tile_png.as_slice()).unwrap();
+    }
+
+    fn handle_vector_tile(&self, x: int, y: int, z: int, w: &mut ResponseWriter) {
+        w.headers.content_type = Some(headers::content_type::MediaType {
+            type_: "application".to_string(),
+            subtype: "json".to_string(),
+            parameters: Vec::new(),
+        });
+        let tile_png = self.vector_queue.push((x, y, z)).recv();
         w.write(tile_png.as_slice()).unwrap();
     }
 
@@ -90,6 +101,18 @@ impl TileServer {
                     None => {}
                 };
 
+                match regex!(r"^/vector/(\d+)/(\d+)/(\d+)").captures(url.as_slice()) {
+                    Some(caps) => {
+                        self.handle_vector_tile(
+                            from_str::<int>(caps.at(2)).unwrap(),
+                            from_str::<int>(caps.at(3)).unwrap(),
+                            from_str::<int>(caps.at(1)).unwrap(),
+                            w);
+                        return
+                    },
+                    None => {}
+                };
+
                 self.handle_static(url.as_slice(), w);
             },
             _ => self.handle_404(w)
@@ -116,13 +139,26 @@ impl Server for TileServer {
 
 fn main() {
     use std::os::args;
-    let source_path = Path::new(args().get(1).as_slice());
+
+    let raster_path = Path::new(args().get(1).as_slice());
     let (raster_queue, dispatcher) = WorkQueue::<(int, int, int), Vec<u8>>();
     task::spawn(proc() { dispatcher.run(); });
     for _ in range(0, 4) {
-        raster_tile_worker(&raster_queue, &source_path);
+        raster_tile_worker(&raster_queue, &raster_path);
     }
-    TileServer{raster_queue: raster_queue.proxy()}.serve_forever();
+
+    let vector_path = Path::new(args().get(2).as_slice());
+    let (vector_queue, dispatcher) = WorkQueue::<(int, int, int), Vec<u8>>();
+    task::spawn(proc() { dispatcher.run(); });
+    for _ in range(0, 4) {
+        vector_tile_worker(&vector_queue, &vector_path);
+    }
+
+    let server = TileServer{
+        raster_queue: raster_queue.proxy(),
+        vector_queue: vector_queue.proxy()
+    };
+    server.serve_forever();
 }
 
 

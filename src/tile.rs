@@ -4,16 +4,17 @@ use std::io::{File, TempDir};
 use std::task;
 use gdal::geom::Point;
 use gdal::proj::{Proj, DEG_TO_RAD};
-use gdal::raster::{RasterDataset, open, get_driver};
+use gdal::raster;
+use gdal::vector;
 use gdal::warp::reproject;
 use workqueue::WorkQueue;
 
 static webmerc_limit: f64 = 20037508.342789244;
 
 
-pub fn tile(source: &RasterDataset, (x, y, z): (int, int, int)) -> Vec<u8> {
-    let memory_driver = get_driver("MEM").unwrap();
-    let png_driver = get_driver("PNG").unwrap();
+pub fn raster_tile(source: &raster::RasterDataset, (x, y, z): (int, int, int)) -> Vec<u8> {
+    let memory_driver = raster::get_driver("MEM").unwrap();
+    let png_driver = raster::get_driver("PNG").unwrap();
 
     let wgs84 = Proj::new("+proj=longlat +datum=WGS84 +no_defs".to_string()).unwrap();
     let webmerc = Proj::new(format!("{}{}",
@@ -74,9 +75,35 @@ pub fn raster_tile_worker(
     queue: &WorkQueue<(int, int, int), Vec<u8>>,
     source_path: &Path
 ) {
-    let source = open(source_path).unwrap();
+    let source = raster::open(source_path).unwrap();
     let worker = queue.worker();
     task::spawn(proc() {
-        worker.run(|xyz| tile(&source, xyz));
+        worker.run(|xyz| raster_tile(&source, xyz));
+    });
+}
+
+
+pub fn vector_tile(source: &vector::VectorDataset, (x, y, z): (int, int, int)) -> Vec<u8> {
+    let layer = source.layer(0).unwrap();
+    let mut rv = "{\"type\":\"FeatureCollection\",\n\"features\":[".to_string();
+    for f in layer.features() {
+        rv = rv.append("\n")
+               .append(f.json().as_slice())
+               .append(",");
+    }
+    rv.pop_char();
+    rv = rv.append("\n]}\n");
+    return rv.into_bytes();
+}
+
+
+pub fn vector_tile_worker(
+    queue: &WorkQueue<(int, int, int), Vec<u8>>,
+    source_path: &Path
+) {
+    let source = vector::open(source_path).unwrap();
+    let worker = queue.worker();
+    task::spawn(proc() {
+        worker.run(|xyz| vector_tile(&source, xyz));
     });
 }
