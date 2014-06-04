@@ -219,15 +219,15 @@ var width = Math.max(960, window.innerWidth),\n\
 var tile = d3.geo.tile()\n\
     .size([width, height]);\n\
 var projection = d3.geo.mercator()\n\
-    .scale((1 << 21) / 2 / Math.PI)\n\
+    .scale((1 << 22) / 2 / Math.PI)\n\
     .translate([-width / 2, -height / 2]); // just temporary\n\
 var tileProjection = d3.geo.mercator();\n\
 var tilePath = d3.geo.path()\n\
     .projection(tileProjection);\n\
 var zoom = d3.behavior.zoom()\n\
     .scale(projection.scale() * 2 * Math.PI)\n\
-    .scaleExtent([1 << 20, 1 << 23])\n\
-    .translate(projection([-74.0064, 40.7142]).map(function(x) { return -x; }))\n\
+    .scaleExtent([1 << 21, 1 << 24])\n\
+    .translate(projection([29.64, 45.155]).map(function(x) { return -x; }))\n\
     .on('zoom', zoomed);\n\
 var map = d3.select('body').append('div')\n\
     .attr('class', 'map')\n\
@@ -261,15 +261,15 @@ function zoomed() {\n\
       .style('top', function(d) { return d[1] * 256 + 'px'; })\n\
       .each(function(d) {\n\
         var svg = d3.select(this);\n\
-        this._xhr = d3.json('http://' + ['a', 'b', 'c'][(d[0] * 31 + d[1]) % 3] + '.tile.openstreetmap.us/vectiles-highroad/' + d[2] + '/' + d[0] + '/' + d[1] + '.json', function(error, json) {\n\
+        var url = '/vector/' + d[2] + '/' + d[0] + '/' + d[1];\n\
+        this._xhr = d3.json(url, function(error, json) {\n\
           var k = Math.pow(2, d[2]) * 256; // size of the world in pixels\n\
           tilePath.projection()\n\
               .translate([k / 2 - d[0] * 256, k / 2 - d[1] * 256]) // [0°,0°] in pixels\n\
               .scale(k / 2 / Math.PI);\n\
           svg.selectAll('path')\n\
-              .data(json.features.sort(function(a, b) { return a.properties.sort_key - b.properties.sort_key; }))\n\
+              .data(json.features)\n\
             .enter().append('path')\n\
-              .attr('class', function(d) { return d.properties.kind; })\n\
               .attr('d', tilePath);\n\
         });\n\
       });\n\
