@@ -31,17 +31,18 @@ struct TileServer {
 }
 
 
-impl Server for TileServer {
-    fn get_config(&self) -> Config {
-        Config {
-            bind_address: SocketAddr {
-                ip: Ipv4Addr(0, 0, 0, 0),
-                port: 8001,
-            },
-        }
+impl TileServer {
+    fn handle_tile(&self, x: int, y: int, z: int, w: &mut ResponseWriter) {
+        w.headers.content_type = Some(headers::content_type::MediaType {
+            type_: "image".to_string(),
+            subtype: "png".to_string(),
+            parameters: Vec::new(),
+        });
+        let tile_png = self.queue.push((x, y, z)).recv();
+        w.write(tile_png.as_slice()).unwrap();
     }
 
-    fn handle_request(&self, r: &Request, w: &mut ResponseWriter) {
+    fn handle(&self, r: &Request, w: &mut ResponseWriter) {
         w.headers.content_type = Some(headers::content_type::MediaType {
             type_: "text".to_string(),
             subtype: "html".to_string(),
@@ -62,14 +63,7 @@ impl Server for TileServer {
                         from_str::<int>(bits.get(4).as_slice())
                     ) {
                         (Some(z), Some(x), Some(y)) => {
-                            let content_type = headers::content_type::MediaType {
-                                type_: "image".to_string(),
-                                subtype: "png".to_string(),
-                                parameters: Vec::new(),
-                            };
-                            w.headers.content_type = Some(content_type);
-                            let tile_png = self.queue.push((x, y, z)).recv();
-                            w.write(tile_png.as_slice()).unwrap();
+                            self.handle_tile(x, y, z, w);
                         },
                         _ => {}
                     }
@@ -80,7 +74,22 @@ impl Server for TileServer {
 
         w.status = NotFound;
         w.write("Page not found :(\n".as_bytes()).unwrap();
+    }
+}
 
+
+impl Server for TileServer {
+    fn get_config(&self) -> Config {
+        Config {
+            bind_address: SocketAddr {
+                ip: Ipv4Addr(0, 0, 0, 0),
+                port: 8001,
+            },
+        }
+    }
+
+    fn handle_request(&self, r: &Request, w: &mut ResponseWriter) {
+        self.handle(r, w);
     }
 }
 
