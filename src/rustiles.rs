@@ -1,7 +1,13 @@
+#![feature(phase)]
+
 extern crate sync;
 extern crate http;
 extern crate test;
 extern crate gdal;
+
+#[phase(syntax)]
+extern crate regex_macros;
+extern crate regex;
 
 use std::vec::Vec;
 use std::io::net::ip::{SocketAddr, Ipv4Addr};
@@ -70,22 +76,19 @@ impl TileServer {
 
         match r.request_uri {
             AbsolutePath(ref url) => {
-                let bits: Vec<String> = url.as_slice().split('/').map(|s| s.to_string()).collect();
-                if bits.len() == 5 && *bits.get(0) == "".to_string() && *bits.get(1) == "tile".to_string() {
-                    match (
-                        from_str::<int>(bits.get(2).as_slice()),
-                        from_str::<int>(bits.get(3).as_slice()),
-                        from_str::<int>(bits.get(4).as_slice())
-                    ) {
-                        (Some(z), Some(x), Some(y)) => {
-                            self.handle_tile(x, y, z, w);
-                        },
-                        _ => {}
-                    }
-                }
-                else {
-                    self.handle_static(url.as_slice(), w);
-                }
+                match regex!(r"^/tile/(\d+)/(\d+)/(\d+)").captures(url.as_slice()) {
+                    Some(caps) => {
+                        self.handle_tile(
+                            from_str::<int>(caps.at(2)).unwrap(),
+                            from_str::<int>(caps.at(3)).unwrap(),
+                            from_str::<int>(caps.at(1)).unwrap(),
+                            w);
+                        return
+                    },
+                    None => {}
+                };
+
+                self.handle_static(url.as_slice(), w);
             },
             _ => {}
         };
